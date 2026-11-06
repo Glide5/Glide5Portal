@@ -83,6 +83,8 @@ select tests.logout_to_anon();
 select tests.ok(tests.refused('select * from public.profiles'), 'Signed-out visitor cannot read profiles');
 select tests.ok(tests.refused('select * from public.leave_requests'), 'Signed-out visitor cannot read leave requests');
 select tests.ok(tests.refused('select * from public.employee_details'), 'Signed-out visitor cannot read private details');
+select tests.ok(tests.refused('select public.is_hr()'), 'Signed-out visitor cannot call role-check functions');
+select tests.ok(tests.refused($$select * from public.leave_balances('44444444-4444-4444-8444-444444444444')$$), 'Signed-out visitor cannot call leave balance function');
 reset role;
 
 -- ---------------------------------------------------------------------------
@@ -145,6 +147,7 @@ select tests.ok(tests.refused($$insert into public.announcements (title, body) v
   'Employee cannot post announcements');
 select tests.ok(tests.refused($$insert into public.departments (name) values ('Shadow IT')$$),
   'Employee cannot add departments');
+select tests.ok(tests.refused('select public.handle_new_auth_user()'), 'Employee cannot call internal trigger functions');
 reset role;
 
 -- ---------------------------------------------------------------------------

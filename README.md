@@ -55,6 +55,7 @@ To run Supabase fully on your machine instead (needs Docker): `npx supabase star
 
 1. Create a file: `npx supabase migration new describe_the_change` (or add `supabase/migrations/<timestamp>_<name>.sql` by hand).
 2. Write additive SQL where possible (add columns/tables; avoid dropping or renaming in the same release as the code change).
+   New functions are not runnable by anyone by default: add `grant execute on function ... to authenticated;` for functions the app or access rules call.
 3. Run the tests: `npm run test:db -- --fresh <url-of-an-empty-postgres-database>`.
 4. Open a pull request. GitHub Actions applies every migration to a fresh database and runs the permission tests.
 5. Merge. GitHub Actions runs `supabase db push` against **development**, then against **production** once a reviewer approves the `production` environment.
