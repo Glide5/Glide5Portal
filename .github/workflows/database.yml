@@ -1,0 +1,84 @@
+name: Database
+
+# 1. Every pull request: apply all migrations + seed to a throwaway Postgres
+#    and run the permission tests.
+# 2. Merge to main: apply NEW migrations to the development project, then to
+#    production after approval (GitHub environment "production").
+#    `supabase db push` only runs migrations that have not run yet. It never
+#    resets the database and never loads seed data, so existing data is kept.
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "db-tests/**"
+      - "scripts/test-db.sh"
+      - ".github/workflows/database.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/database.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test migrations and access rules
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migrations to an empty database and run the tests
+        run: bash scripts/test-db.sh --fresh "postgresql://postgres:postgres@localhost:5432/postgres"
+
+  deploy-development:
+    name: Apply migrations to development
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: List migrations that will run
+        run: supabase migration list --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Apply new migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+  deploy-production:
+    name: Apply migrations to production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: deploy-development
+    runs-on: ubuntu-latest
+    # Add "Required reviewers" to this environment in GitHub so production waits for approval.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: List migrations that will run
+        run: supabase migration list --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      - name: Apply new migrations
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
